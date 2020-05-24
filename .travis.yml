@@ -6,56 +6,53 @@ cache:
 - cargo
 matrix:
   include:
-    - env:
-        - NAME=fwloki
-        - TARGET=arm-unknown-linux-gnueabihf
-        - CARGO_TARGET_ARM_UNKNOWN_LINUX_GNUEABIHF_LINKER=arm-linux-gnueabihf-gcc
-        - PACKAGE=$NAME-arm.tar.gz
-      addons:
-        apt:
-          packages: &armhf
-            - gcc-arm-linux-gnueabihf
-            - libc6-armhf-cross
-            - libc6-dev-armhf-cross
-    - env:
-        - NAME=fwloki
-        - TARGET=armv7-unknown-linux-gnueabihf
-        - CARGO_TARGET_ARMV7_UNKNOWN_LINUX_GNUEABIHF_LINKER=arm-linux-gnueabihf-gcc
-        - PACKAGE=$NAME-armv7.tar.gz
-      addons:
-        apt:
-          packages: *armhf
-    - env:
-        - NAME=fwloki
-        - TARGET=i686-unknown-linux-gnu
-        - PACKAGE=$NAME-i686.tar.gz
-      addons:
-        apt:
-          packages:
-            - gcc-multilib
-    - env:
-        - NAME=fwloki
-        - TARGET=x86_64-unknown-linux-gnu
-        - PACKAGE=$NAME-x86_64.tar.gz
-
+  - env:
+    - NAME=fwloki
+    - TARGET=arm-unknown-linux-gnueabihf
+    - CARGO_TARGET_ARM_UNKNOWN_LINUX_GNUEABIHF_LINKER=arm-linux-gnueabihf-gcc
+    - PACKAGE=$NAME-arm.tar.gz
+    addons:
+      apt:
+        packages: &1
+        - gcc-arm-linux-gnueabihf
+        - libc6-armhf-cross
+        - libc6-dev-armhf-cross
+  - env:
+    - NAME=fwloki
+    - TARGET=armv7-unknown-linux-gnueabihf
+    - CARGO_TARGET_ARMV7_UNKNOWN_LINUX_GNUEABIHF_LINKER=arm-linux-gnueabihf-gcc
+    - PACKAGE=$NAME-armv7.tar.gz
+    addons:
+      apt:
+        packages: *1
+  - env:
+    - NAME=fwloki
+    - TARGET=i686-unknown-linux-gnu
+    - PACKAGE=$NAME-i686.tar.gz
+    addons:
+      apt:
+        packages:
+        - gcc-multilib
+  - env:
+    - NAME=fwloki
+    - TARGET=x86_64-unknown-linux-gnu
+    - PACKAGE=$NAME-x86_64.tar.gz
 install:
-  - export PATH="$PATH:$HOME/.cargo/bin"
-  - rustup target add $TARGET || true
+- export PATH="$PATH:$HOME/.cargo/bin"
+- rustup target add $TARGET || true
 script:
-  - |
-    if [ $TARGET = "x86_64-unknown-linux-gnu" ]; then
-      cargo test
-    fi
-  - cargo build --target $TARGET --verbose --release
-
+- |
+  if [ $TARGET = "x86_64-unknown-linux-gnu" ]; then
+    cargo test
+  fi
+- cargo build --target $TARGET --verbose --release
 before_deploy:
-  - tar -czf $PACKAGE -C target/$TARGET/release/ $NAME
-
+- tar -czf $PACKAGE -C target/$TARGET/release/ $NAME
 deploy:
   provider: releases
   api_key:
-    secure: "I1pMvhljeuqXkQDtaktLAcC0VFwlHZIXiM81f+FI+m8pWBV6eAy4alD9+tBSl808g8VIyv1nTbw/UGxVlKALqhR0iT9eCCxvVrgJuWKawJYuzrKxYnKf82t3RjTO1qh6Uf3LeCuZ+ReGbFeR4wTlxC9CQLwdBg3xUA+8bNNJigrEECmNjrUigmRdnKb1R1KXCNW9AwXMlVv+4I1me50/dFLdnhlaAjpsWFXKb2vAk/xoyob1WMEZbInrD/NX1kOz0UPiIX/K8Qjsgp6SAFxjhWGu9jk7VnzvEGPUmTS7OJ4tols2Lhde1AC0y/pElt3YFjA3qfKJfk4B8bUAizomeR+GwJ5YD/CEqhopa8b34SuxeHUOkX9GxPoba08qAmqPAeWcO2hlS0aBiiIUMIOgUqjGDy3MiMqg7VdalkiNtRsr2iCXXSe9p2FPWFsYW1bjGCbIYGBrmWZZEIVYJk2laSmIng27MBvlJFdDkX5Nf3d75Y5U/ZAUwfhpA8ZxwVbddKjYs1S8x09s5yhVOjxJzK2G0aJIg94wMflYEsygrZxjpMkOI79HMZrKArY2S6N6wqgKIdFM2kCmk0ps9DM9pn2o9h91EpnAi7PUd8RIB8yOh9g/K4K9ClvScUqagLR+DvjPoMh68F7Y5XnbuZkIgQ7fKB0cBtB+JnrIE3b3icI="
-  file: ${PACKAGE}
+    secure: QnJ/dh9yrdfEura2lrL7TtyH+hM60SJfLP0WnmJkxT0Fjkt3m1dV2DMQJWHHIZvQWwerQr1Vf1mK/F7ehc9By+9doTtK/6xRwsP9Ze/Y7+1fSOfVZy/41OW7HMtbX+XuO/CdLuEe5mbgoHUIJyJd7ADVyHV+2M/OVP3cjnB/82JOXKaLpeYhGP1T1NNUgSKu7YnJ+3vVYMws8aAeTn3Vn/oRSqKCKC1GMZYda7+osAy1jcn6jfxGqLAaGKvNHTb91QYGTYa2Mvq0qPejgEorE3g/NTSB3cO2/De3kkJn18NRKDBJx/km0juSYULLYqv7F/oH7ta3iiBPWw+7vM9Yl223SMsdkg+utuHYtiU5Jl2gb6u/k6uMdK2CUuV2RYQ8VdG9fF/sG0CU4J373TZ60A74XhmtYPeE92tm/aHX35iNA0WrC+LbGZrKa3unu3sZqAmx1P2HICAlBHQcXc7stmnkMFwQCAMrDLB4MOfUfrZ/nEwIOTwkE4hA2oX187jgwVC+jBM5Rq+in30tUNtisWGoKsWScUNtQkCDlpF7Vv8vFEpzj5cvqaZtN71U07o7OGTgNcWk3ozPwA939iGghM4p9bucQqJYHkfl3qVXgJDFYEnmfkWICanGaGtcFDEfc7f38GVkDlM09a3k7VlBRjZLcQpxAO8BNGGV/iTV/dM=
+  file: "${PACKAGE}"
   skip_cleanup: true
   on:
     tags: true
