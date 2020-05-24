@@ -1,0 +1,69 @@
+language: rust
+rust:
+- stable
+cache:
+- apt
+- cargo
+matrix:
+  include:
+    - env:
+        - NAME=fwloki
+        - TARGET=arm-unknown-linux-gnueabihf
+        - LINKER=arm-linux-gnueabihf-gcc
+        - PACKAGE=$NAME-arm.tar.gz
+      addons:
+        apt:
+          packages: &armhf
+            - gcc-arm-linux-gnueabihf
+            - libc6-armhf-cross
+            - libc6-dev-armhf-cross
+    - env:
+        - NAME=fwloki
+        - TARGET=armv7-unknown-linux-gnueabihf
+        - LINKER=arm-linux-gnueabihf-gcc
+        - PACKAGE=$NAME-armv7.tar.gz
+      addons:
+        apt:
+          packages: *armhf
+    - env:
+        - NAME=fwloki
+        - TARGET=i686-unknown-linux-gnu
+        - PACKAGE=$NAME-i686.tar.gz
+      addons:
+        apt:
+          packages:
+            - gcc-multilib
+    - env:
+        - NAME=fwloki
+        - TARGET=x86_64-unknown-linux-gnu
+        - PACKAGE=$NAME-x86_64.tar.gz
+
+install:
+  - export PATH="$PATH:$HOME/.cargo/bin"
+  - rustup target add $TARGET || true
+  - |
+    if [ -n "$LINKER" ]; then
+      mkdir -p ~/.cargo
+      echo >> ~/.cargo/config
+      echo "[target.$TARGET]" >> ~/.cargo/config
+      echo "linker = \"$LINKER\"" >> ~/.cargo/config
+    fi
+script:
+  - |
+    if [ $TARGET = "x86_64-unknown-linux-gnu" ]; then
+      cargo test
+    fi
+  - cargo build --target $TARGET --verbose --release
+
+before_deploy:
+  - tar -czf $PACKAGE -C target/$TARGET/release/ $NAME
+
+deploy:
+  provider: releases
+  api_key:
+    secure: "I1pMvhljeuqXkQDtaktLAcC0VFwlHZIXiM81f+FI+m8pWBV6eAy4alD9+tBSl808g8VIyv1nTbw/UGxVlKALqhR0iT9eCCxvVrgJuWKawJYuzrKxYnKf82t3RjTO1qh6Uf3LeCuZ+ReGbFeR4wTlxC9CQLwdBg3xUA+8bNNJigrEECmNjrUigmRdnKb1R1KXCNW9AwXMlVv+4I1me50/dFLdnhlaAjpsWFXKb2vAk/xoyob1WMEZbInrD/NX1kOz0UPiIX/K8Qjsgp6SAFxjhWGu9jk7VnzvEGPUmTS7OJ4tols2Lhde1AC0y/pElt3YFjA3qfKJfk4B8bUAizomeR+GwJ5YD/CEqhopa8b34SuxeHUOkX9GxPoba08qAmqPAeWcO2hlS0aBiiIUMIOgUqjGDy3MiMqg7VdalkiNtRsr2iCXXSe9p2FPWFsYW1bjGCbIYGBrmWZZEIVYJk2laSmIng27MBvlJFdDkX5Nf3d75Y5U/ZAUwfhpA8ZxwVbddKjYs1S8x09s5yhVOjxJzK2G0aJIg94wMflYEsygrZxjpMkOI79HMZrKArY2S6N6wqgKIdFM2kCmk0ps9DM9pn2o9h91EpnAi7PUd8RIB8yOh9g/K4K9ClvScUqagLR+DvjPoMh68F7Y5XnbuZkIgQ7fKB0cBtB+JnrIE3b3icI="
+  file: ${PACKAGE}
+  skip_cleanup: true
+  on:
+    tags: true
+    repo: fwloki
