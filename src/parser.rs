@@ -1,11 +1,9 @@
-use nom::bytes::complete::take_until;
-
 use std::collections::HashMap;
 
 use chrono::offset::TimeZone;
 use chrono::{DateTime, Datelike, Utc};
 use nom::{
-    bytes::complete::{tag, take},
+    bytes::complete::{tag, take, take_till, take_until},
     IResult,
 };
 
@@ -75,7 +73,7 @@ fn parse_bracketed_param(i: &str) -> IResult<&str, &str> {
 fn parse_kvs(i: &str) -> IResult<&str, HashMap<&str, &str>> {
     let (i, kvs) = nom::multi::separated_list0(
         nom::character::complete::char(' '),
-        nom::sequence::separated_pair(take_until("="), tag("="), take_until(" ")),
+        nom::sequence::separated_pair(take_until("="), tag("="), take_till(|c| c == ' ')),
     )(i)?;
 
     let mut map = HashMap::new();
