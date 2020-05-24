@@ -59,4 +59,3 @@ deploy:
   skip_cleanup: true
   on:
     tags: true
-    repo: fwloki
