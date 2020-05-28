@@ -19,10 +19,10 @@ The world's your clam, really.
 ```toml
 log-file = "/var/log/messages"
 
-# [geoip]
-# asn-db = "./db/GeoLite2-ASN.mmdb"
-# city-db = "./db/GeoLite2-City.mmdb"
-# country-db = "./db/GeoLite2-Country.mmdb"
+[geoip] # optional
+asn-db = "/usr/share/GeoIP/GeoLite2-ASN.mmdb"
+city-db = "/usr/share/GeoIP/GeoLite2-City.mmdb"
+country-db = "/usr/share/GeoIP/GeoLite2-Country.mmdb"
 
 [firewall]
 rules = [
