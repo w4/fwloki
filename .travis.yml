@@ -19,6 +19,16 @@ matrix:
         - libc6-dev-armhf-cross
   - env:
     - NAME=fwloki
+    - TARGET=mips64-unknown-linux-gnuabi64
+    - CARGO_TARGET_MIPS64_UNKNOWN_LINUX_GNUEABIHF64_LINKER=mips64-linux-gnuabi64-gcc
+    addons:
+      apt:
+        packages: &1
+        - gcc-mips64-linux-gnuabi64
+        - libc6-mips64-cross
+        - libc6-dev-mips64-cross
+  - env:
+    - NAME=fwloki
     - TARGET=armv7-unknown-linux-gnueabihf
     - CARGO_TARGET_ARMV7_UNKNOWN_LINUX_GNUEABIHF_LINKER=arm-linux-gnueabihf-gcc
     - PACKAGE=$NAME-armv7.tar.gz
