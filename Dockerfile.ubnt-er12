@@ -1,0 +1,18 @@
+FROM debian:stretch
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        linux-headers-amd64 \
+        gcc libc6-dev qemu-user ca-certificates \
+        gcc-mips-linux-gnu libc6-dev-mips-cross \
+        qemu-system-mips linux-headers-amd64 \
+        curl
+
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+RUN /root/.cargo/bin/rustup target add mips-unknown-linux-gnu
+
+ENV CARGO_TARGET_MIPS_UNKNOWN_LINUX_GNU_LINKER=mips-linux-gnu-gcc \
+    CARGO_TARGET_MIPS_UNKNOWN_LINUX_GNU_RUNNER="qemu-mips -L /usr/mips-linux-gnu" \
+    TARGET=mips-unknown-linux-gnu \
+    QEMU_LD_PREFIX=/usr/mips-linux-gnu \
+    RUST_TEST_THREADS=1 \
+    PATH=/root/.cargo/bin:$PATH

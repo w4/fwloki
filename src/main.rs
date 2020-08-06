@@ -58,8 +58,8 @@ fn open_log_file(path: &Path) -> Result<LogReader> {
         }) => {
             let _ = send.try_send(ModifyType::Rotate);
         }
+        Ok(Event { .. }) => {}
         Err(e) => error!("Error watching file: {:?}", e),
-        _ => {}
     })?;
 
     watcher.watch(path, RecursiveMode::NonRecursive)?;

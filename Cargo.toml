@@ -22,7 +22,7 @@ nom = "6.0.0-alpha1"
 chrono = "0.4"
 
 tokio = { version = "0.2", features = ["full"] }
-reqwest = { version = "0.10", default-features = false, features = ["native-tls-vendored"] }
+reqwest = { version = "0.10", default-features = false }
 
 prost = "0.6"
 prost-types = "0.6"

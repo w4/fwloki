@@ -3,7 +3,10 @@ use std::collections::HashMap;
 use chrono::offset::TimeZone;
 use chrono::{DateTime, Datelike, Utc};
 use nom::{
-    bytes::complete::{tag, take, take_till, take_until},
+    bytes::complete::{is_a, is_not, tag, take, take_till, take_until},
+    character::complete::char,
+    combinator::opt,
+    sequence::delimited,
     IResult,
 };
 
@@ -31,7 +34,7 @@ fn parse_month<'a>((i, s): (&'a str, &str)) -> IResult<&'a str, u32> {
 fn take_n_digits(i: &str, n: usize) -> IResult<&str, u32> {
     let (i, digits) = take(n)(i)?;
 
-    match digits.parse() {
+    match digits.trim().parse() {
         Ok(res) => Ok((i, res)),
         Err(_) => Err(nom::Err::Failure(nom::error_position!(
             "Invalid string, expected ASCII representation of a number",
@@ -62,14 +65,6 @@ fn parse_hostname(i: &str) -> IResult<&str, &str> {
     take_until(" ")(i)
 }
 
-fn parse_bracketed_param(i: &str) -> IResult<&str, &str> {
-    let (i, _) = tag("[")(i)?;
-    let (i, time) = take_until("]")(i)?;
-    let (i, _) = tag("]")(i)?;
-
-    Ok((i, time))
-}
-
 fn parse_kvs(i: &str) -> IResult<&str, HashMap<&str, &str>> {
     let (i, kvs) = nom::multi::separated_list0(
         nom::character::complete::char(' '),
@@ -89,9 +84,9 @@ pub fn parse_log_line(i: &str) -> IResult<&str, Log> {
     let (i, _) = tag(" ")(i)?;
     let (i, hostname) = parse_hostname(i)?;
     let (i, _) = tag(" kernel: ")(i)?;
-    let (i, _) = parse_bracketed_param(i)?; // kernel time
-    let (i, _) = tag(" ")(i)?;
-    let (i, rule) = parse_bracketed_param(i)?;
+    let (i, _) = opt(delimited(char('['), is_a("1234567890."), char(']')))(i)?; // kernel time
+    let (i, _) = opt(tag(" "))(i)?;
+    let (i, rule) = delimited(char('['), is_not("]"), char(']'))(i)?;
     let (i, values) = parse_kvs(i)?;
 
     Ok((
@@ -146,6 +141,21 @@ mod tests {
         assert_eq!(parsed.values.get("IN"), Some(&"pppoe0"));
         assert_eq!(parsed.values.get("MAC"), Some(&""));
         assert_eq!(parsed.values.get("DST"), Some(&"80.80.80.80"));
+        assert_eq!(rest, "");
+    }
+
+    #[test]
+    fn test_parse_ubnt_line() {
+        let (rest, parsed) = parse_log_line("Aug  6 13:26:46 ubnt kernel: [WAN-IN-V6-default-D]IN=tun0 OUT=bond1 MAC=00:00 TUNNEL=224.61.82.50->81.81.82.82 SRC=240e:00f7:4f01:000c:0000:0000:0000:0002 DST=2a01:be30:3411:0330:0051:00ff:fe23:f991 LEN=64 TC=0 HOPLIMIT=241 FLOWLBL=0 PROTO=TCP SPT=8695 DPT=8086 WINDOW=29200 RES=0x00 SYN URGP=0").unwrap();
+        assert_eq!(parsed.time.hour(), 13);
+        assert_eq!(parsed.hostname, "ubnt");
+        assert_eq!(parsed.rule, "WAN-IN-V6-default-D");
+        assert_eq!(parsed.values.get("IN"), Some(&"tun0"));
+        assert_eq!(parsed.values.get("MAC"), Some(&"00:00"));
+        assert_eq!(
+            parsed.values.get("TUNNEL"),
+            Some(&"224.61.82.50->81.81.82.82")
+        );
         assert_eq!(rest, "");
     }
 }
