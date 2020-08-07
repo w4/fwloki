@@ -7,9 +7,9 @@ edition = "2018"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-notify = "5.0.0-pre.2"
+notify = "5.0.0-pre.3"
 crossbeam-channel = "0.4"
-maxminddb = { version = "0.13", features = ["mmap"] }
+maxminddb = { version = "0.14", features = ["mmap"] }
 
 clap = "3.0.0-beta.1"
 env_logger = "0.7"

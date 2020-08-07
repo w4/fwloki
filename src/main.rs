@@ -5,6 +5,7 @@ mod loki;
 mod parser;
 
 use crate::parser::Log;
+use bytes::BytesMut;
 use chrono::DateTime;
 use chrono::Utc;
 use clap::Clap;
@@ -23,6 +24,7 @@ use notify::{
     event::ModifyKind, immediate_watcher, Event, EventKind, RecommendedWatcher, RecursiveMode,
     Watcher,
 };
+use snap::raw::Encoder as SnappyEncoder;
 
 use anyhow::Result;
 
@@ -86,24 +88,22 @@ struct FirewallEntry<'a> {
     proto: &'a str,
 
     asn: Option<u32>,
-    asn_org: Option<&'a String>,
-    city: Option<&'a String>,
-    country_code: Option<&'a String>,
-    country: Option<&'a String>,
+    asn_org: Option<&'a str>,
+    city: Option<&'a str>,
+    country_code: Option<&'a str>,
+    country: Option<&'a str>,
     lat: Option<f64>,
     lng: Option<f64>,
 }
 impl<'a> FirewallEntry<'a> {
     fn from(
         log: &'a Log<'a>,
-        city: &'a Option<geoip2::City>,
-        country: &'a Option<geoip2::Country>,
-        asn: &'a Option<geoip2::Asn>,
+        city: Option<&geoip2::City<'a>>,
+        country: Option<&geoip2::Country<'a>>,
+        asn: Option<&geoip2::Asn<'a>>,
     ) -> Result<FirewallEntry<'a>> {
-        let country = country
-            .as_ref()
-            .and_then(|country| country.country.as_ref());
-        let location = city.as_ref().and_then(|city| city.location.as_ref());
+        let country = country.and_then(|country| country.country.as_ref());
+        let location = city.and_then(|city| city.location.as_ref());
 
         Ok(FirewallEntry {
             time: &log.time,
@@ -118,19 +118,18 @@ impl<'a> FirewallEntry<'a> {
             dst_port: log.values.get("DPT").unwrap_or(&"").parse()?,
             proto: log.values.get("PROTO").unwrap_or(&""),
 
-            asn: asn.as_ref().and_then(|asn| asn.autonomous_system_number),
-            asn_org: asn
-                .as_ref()
-                .and_then(|asn| asn.autonomous_system_organization.as_ref()),
+            asn: asn.and_then(|asn| asn.autonomous_system_number),
+            asn_org: asn.and_then(|asn| asn.autonomous_system_organization),
             city: city
-                .as_ref()
                 .and_then(|city| city.city.as_ref())
                 .and_then(|city| city.names.as_ref())
-                .and_then(|names| names.get("en")),
-            country_code: country.and_then(|country| country.iso_code.as_ref()),
+                .and_then(|names| names.get("en").or_else(|| names.values().next()))
+                .copied(),
+            country_code: country.and_then(|country| country.iso_code),
             country: country
                 .and_then(|country| country.names.as_ref())
-                .and_then(|names| names.get("en")),
+                .and_then(|names| names.get("en").or_else(|| names.values().next()))
+                .copied(),
             lat: location.and_then(|loc| loc.latitude),
             lng: location.and_then(|loc| loc.longitude),
         })
@@ -154,13 +153,13 @@ impl Display for FirewallEntry<'_> {
             self.dst,
             self.dst_port,
             self.proto,
-            self.asn.as_ref().map(ToString::to_string).unwrap_or_default(),
-            self.asn_org.as_ref().map(ToString::to_string).unwrap_or_default(),
-            self.city.as_ref().map(ToString::to_string).unwrap_or_default(),
-            self.country_code.as_ref().map(ToString::to_string).unwrap_or_default(),
-            self.country.as_ref().map(ToString::to_string).unwrap_or_default(),
-            self.lat.as_ref().map(ToString::to_string).unwrap_or_default(),
-            self.lng.as_ref().map(ToString::to_string).unwrap_or_default(),
+            self.asn.unwrap_or_default(),
+            self.asn_org.unwrap_or_default(),
+            self.city.unwrap_or_default(),
+            self.country_code.unwrap_or_default(),
+            self.country.unwrap_or_default(),
+            self.lat.unwrap_or_default(),
+            self.lng.unwrap_or_default(),
         )
     }
 }
@@ -209,9 +208,15 @@ async fn main() {
     let city_db = open_geoip_reader(config.geoip.city_db.as_ref());
     let country_db = open_geoip_reader(config.geoip.country_db.as_ref());
 
+    let mut snappy = SnappyEncoder::new();
+    let mut encode_buf = BytesMut::new();
+    let mut compress_buf = BytesMut::new();
+
     let mut reader = open_log_file_or_exit();
     let mut buf = String::new();
     let client = reqwest::Client::new();
+
+    let mut entries: Vec<_> = Vec::with_capacity(8);
 
     loop {
         buf.clear();
@@ -260,33 +265,45 @@ async fn main() {
                 country_db.as_ref().and_then(|db| db.lookup(ip).ok());
 
             let timestamp = log_line.time.timestamp();
-            let entry = match FirewallEntry::from(&log_line, &city, &country, &asn) {
-                Ok(v) => v.to_string(),
-                Err(e) => {
-                    error!("Failed to build firewall entry for log: {:?}", e);
-                    continue;
-                }
-            };
-
-            let req = match crate::loki::create_push_request(vec![(timestamp, entry)]) {
-                Ok(v) => v,
-                Err(e) => {
-                    error!("Error creating a Loki push request: {:?}", e);
-                    continue;
-                }
-            };
-
-            match client.post(&config.loki.push_url).body(req).send().await {
-                Ok(resp) => {
-                    if !resp.status().is_success() {
-                        error!(
-                            "Error pushing log to Loki ({}): {:?}",
-                            resp.status(),
-                            resp.text().await
-                        );
+            let entry =
+                match FirewallEntry::from(&log_line, city.as_ref(), country.as_ref(), asn.as_ref())
+                {
+                    Ok(v) => v.to_string(),
+                    Err(e) => {
+                        error!("Failed to build firewall entry for log: {:?}", e);
+                        continue;
                     }
+                };
+
+            entries.push((timestamp, entry));
+
+            // once the vec reaches capacity, flush to loki
+            if entries.len() == entries.capacity() {
+                let req = match crate::loki::create_push_request(
+                    &mut snappy,
+                    &mut encode_buf,
+                    &mut compress_buf,
+                    &mut entries,
+                ) {
+                    Ok(v) => v,
+                    Err(e) => {
+                        error!("Error creating a Loki push request: {:?}", e);
+                        continue;
+                    }
+                };
+
+                match client.post(&config.loki.push_url).body(req).send().await {
+                    Ok(resp) => {
+                        if !resp.status().is_success() {
+                            error!(
+                                "Error pushing log to Loki ({}): {:?}",
+                                resp.status(),
+                                resp.text().await
+                            );
+                        }
+                    }
+                    Err(e) => error!("Error pushing log to Loki: {:?}", e),
                 }
-                Err(e) => error!("Error pushing log to Loki: {:?}", e),
             }
         }
     }
